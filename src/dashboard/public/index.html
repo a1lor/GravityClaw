@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GravityClaw Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=3">
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+<div id="app">
+  <header id="mobile-header">
+    <div class="mh-left">
+      <div class="bmark"><i data-lucide="star" class="icon-sm"></i></div>
+      <span class="mh-title">GravityClaw</span>
+    </div>
+    <button class="mh-menu" onclick="toggleMobileMenu()" aria-label="Menu">
+      <i data-lucide="menu"></i>
+    </button>
+  </header>
+  <div id="mobile-menu-overlay" class="hidden" onclick="toggleMobileMenu()">
+    <div class="mobile-menu" onclick="event.stopPropagation()">
+      <div class="mm-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="bmark"><i data-lucide="star" class="icon-sm"></i></div>
+          <span class="mh-title">GravityClaw</span>
+        </div>
+        <button class="mh-menu" onclick="toggleMobileMenu()"><i data-lucide="x"></i></button>
+      </div>
+      <nav class="mm-nav">
+        <div class="mm-group-label">COMMUNICATION</div>
+        <div class="mm-item" data-page="chat" onclick="swPageMobile('chat')"><i data-lucide="message-circle"></i> Chat</div>
+        <div class="mm-item" data-page="convos" onclick="swPageMobile('convos')"><i data-lucide="messages-square"></i> Convos</div>
+        <div class="mm-item" data-page="memories" onclick="swPageMobile('memories')"><i data-lucide="brain"></i> Memories</div>
+        <div class="mm-group-label">WORKSPACE</div>
+        <div class="mm-item" data-page="jobs" onclick="swPageMobile('jobs')"><i data-lucide="briefcase"></i> Jobs</div>
+        <div class="mm-item" data-page="apps" onclick="swPageMobile('apps')"><i data-lucide="clipboard-list"></i> Applications</div>
+        <div class="mm-item" data-page="emails" onclick="swPageMobile('emails')"><i data-lucide="mail"></i> Emails</div>
+        <div class="mm-item" data-page="calendar" onclick="swPageMobile('calendar')"><i data-lucide="calendar"></i> Calendar</div>
+        <div class="mm-group-label">SYSTEM & DOCS</div>
+        <div class="mm-item" data-page="spontanee" onclick="swPageMobile('spontanee')"><i data-lucide="send"></i> Candidature</div>
+        <div class="mm-item" data-page="studio" onclick="swPageMobile('studio')"><i data-lucide="file-text"></i> Studio</div>
+        <div class="mm-item" data-page="logs" onclick="swPageMobile('logs')"><i data-lucide="scroll-text"></i> Logs</div>
+        <div class="mm-item" data-page="settings" onclick="swPageMobile('settings')"><i data-lucide="settings"></i> Settings</div>
+      </nav>
+    </div>
+  </div>
+  <aside id="sidebar">
+    <div class="sb-brand">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="bmark"><i data-lucide="star" class="icon-sm"></i></div>
+        <div class="bname">GRAVITY CLAW</div>
+      </div>
+      <i data-lucide="panel-left-close" class="hide-sb-btn" onclick="toggleSidebar()"></i>
+    </div>
+    <nav class="sb-nav">
+      <div class="nav-item active" data-page="chat" onclick="swPage('chat')"><i data-lucide="message-circle"></i> Chat</div>
+      <div class="nav-item" data-page="convos" onclick="swPage('convos')"><i data-lucide="messages-square"></i> Convos</div>
+      <div class="nav-item" data-page="memories" onclick="swPage('memories')"><i data-lucide="brain"></i> Memories</div>
+      <div class="nav-item" data-page="jobs" onclick="swPage('jobs')"><i data-lucide="briefcase"></i> Jobs</div>
+      <div class="nav-item" data-page="apps" onclick="swPage('apps')"><i data-lucide="clipboard-list"></i> Applications</div>
+      <div class="nav-item" data-page="emails" onclick="swPage('emails')"><i data-lucide="mail"></i> Emails</div>
+      <div class="nav-item" data-page="calendar" onclick="swPage('calendar')"><i data-lucide="calendar"></i> Calendar</div>
+      <div class="nav-item" data-page="spontanee" onclick="swPage('spontanee')"><i data-lucide="send"></i> Candidature</div>
+      <div class="nav-item" data-page="studio" onclick="swPage('studio')"><i data-lucide="file-text"></i> Studio</div>
+      <div class="nav-item" data-page="logs" onclick="swPage('logs')"><i data-lucide="scroll-text"></i> Logs</div>
+      <div class="nav-spacer"></div>
+      <div class="nav-item" data-page="settings" onclick="swPage('settings')"><i data-lucide="settings"></i> Settings</div>
+    </nav>
+    <div class="sb-footer">
+      <div class="cpill"><span class="c-lbl">today</span> <span class="c-val">$0.0042</span></div>
+      <div class="sb-controls">
+        <button class="rfbtn" onclick="location.reload()">↻ Refresh</button>
+        <button class="thbtn">🌙</button>
+      </div>
+      <div class="konami">↑↑↓↓←→←→BA</div>
+    </div>
+  </aside>
+
+  <button id="sb-fab" class="sb-fab hidden" onclick="toggleSidebar()" aria-label="Open sidebar">
+    <i data-lucide="panel-left-open"></i>
+  </button>
+
+  <div id="body">
+    <div class="cmd-center" onclick="toggleSpotlight()">
+      <div class="cmd-l">
+        <i data-lucide="search" style="width:20px; height:20px; color:#94A3B8;"></i>
+        <span style="color:#71717a; font-size:14px;">Search Jobs, Memories, or type a command...</span>
+      </div>
+      <div class="cmd-r">⌘K</div>
+    </div>
+    <header class="kpi" id="kpi-strip"></header>
+    <div id="main-wrap"></div>
+  </div>
+</div>
+
+<div id="spotlight-overlay" class="hidden" onclick="toggleSpotlight()">
+  <div class="spotlight-modal" onclick="event.stopPropagation()">
+    <div class="s-input">
+      <i data-lucide="search" style="width:20px; height:20px; color:var(--gold);"></i>
+      <input type="text" id="spotlight-input" placeholder="Search jobs, memories, or type a command..." />
+    </div>
+    <div class="s-res"></div>
+  </div>
+</div>
+
+<script src="app.js?v=3"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+!data/soul.md
+# Railway Volume handles: memory.db, gmail-tokens.json, notes/, cv/
+# No sensitive data in Docker image
+.env
+.env.*
+*.log
+.git/
+.gitignore

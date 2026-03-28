@@ -1,0 +1,42 @@
+{
+  "name": "gravity-claw",
+  "version": "2.0.0",
+  "description": "A lean, secure personal AI agent \u2014 Telegram-only, local-first.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && npm install --prefix src/dashboard-v2 && npm run build --prefix src/dashboard-v2",
+    "start": "node dist/index.js",
+    "local": "tsx scripts/local.ts",
+    "deploy:railway": "railway up"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@pinecone-database/pinecone": "^7.1.0",
+    "better-sqlite3": "^12.6.2",
+    "cheerio": "^1.2.0",
+    "docx": "^9.6.1",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "googleapis": "^171.4.0",
+    "grammy": "^1.35.0",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.25.0",
+    "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^22.13.4",
+    "@types/node-cron": "^3.0.11",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/pdfkit": "^0.17.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}

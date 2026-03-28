@@ -1,0 +1,11 @@
+Je suis particulièrement intéressé par le poste d'Analyste Data LCB-FT en alternance chez AXA France. Votre équipe, dédiée à la lutte contre la fraude et le blanchiment, représente exactement le type d'environnement où je souhaite mettre à profit mes compétences en Data Science. La dimension éthique et réglementaire de ce poste, combinée aux défis techniques qu'il présente, correspond parfaitement à mon projet professionnel dans l'analyse de données appliquée à des enjeux concrets.
+DEAR DAVID - V2 TEST
+
+Au cours de mes expériences, j'ai développé des compétences directement applicables à vos besoins. Chez OKO France, j'ai manipulé des bases de données SQL pour extraire et analyser des données clients. Mon projet chez Keyrus m'a permis d'explorer l'utilisation des LLMs pour l'automatisation de l'analyse de documents, améliorant l'efficacité de traitement de 40%. Avec BeParentalis, j'ai conçu une solution RAG qui a optimisé l'accès à l'information, réduisant le temps de recherche de 60%. Ma formation en Master IA & Data Science m'a également doté d'une solide maîtrise de Python et des outils d'automatisation essentiels pour vos processus de reporting.
+
+Je serais ravi d'échanger avec vous lors d'un entretien pour discuter de ma contribution potentielle à vos projets de détection de fraude et d'automatisation. Ma capacité à traiter de grands volumes de données, combinée à mon approche méthodique et ma rigueur, pourrait apporter une réelle valeur ajoutée à votre équipe. Pourrions-nous convenir d'un rendez-vous pour approfondir ensemble comment mes compétences répondent aux exigences du poste ? Je vous remercie pour l'attention que vous porterez à ma candidature.
+
+DAVID LITVAK
+Recherche d'une Alternance en IA & Data Science
++33 7 55 61 60 25
+litvak.da@gmail.com

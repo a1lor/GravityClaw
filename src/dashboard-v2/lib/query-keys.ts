@@ -1,0 +1,15 @@
+export const queryKeys = {
+  kpis:         ['kpis']         as const,
+  jobs:         ['jobs']         as const,
+  applications: ['applications'] as const,
+  emails:       ['emails']       as const,
+  memories:     ['memories']     as const,
+  dialogues:    ['dialogues']    as const,
+  today:        ['today']        as const,
+  threads:      ['threads']      as const,
+  models:       ['models']       as const,
+  settings:     ['settings']     as const,
+  cvs:          ['cvs']          as const,
+  soul:         ['soul']         as const,
+  spontanee:    ['spontanee']    as const,
+} as const

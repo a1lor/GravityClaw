@@ -1,0 +1,40 @@
+{
+  "name": "gravityclaw-dashboard-v2",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
+    "test:watch": "NODE_OPTIONS=--no-experimental-webstorage vitest",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.56.2",
+    "@xyflow/react": "^12.10.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.446.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^6.26.2",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^2.5.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^25.0.1",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.12",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.6",
+    "vitest": "^2.1.1"
+  }
+}
