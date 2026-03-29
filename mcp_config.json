@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "vercel": {
+      "url": "https://mcp.vercel.com/api/mcp",
+      "headers": {
+        "Authorization": "env:VERCEL_MCP_TOKEN",
+        "Accept": "application/json, text/event-stream"
+      }
+    },
     "pencil": {
       "command": "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
       "args": ["--app", "desktop"]
@@ -13,6 +20,13 @@
       "env": {
         "NODE_OPTIONS": "--no-warnings"
       }
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
     }
   }
 }

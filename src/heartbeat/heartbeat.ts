@@ -5,9 +5,10 @@ import { dashboardButton } from "../telegram/keyboards.js";
 import { getAINewsBriefing } from "../tools/news.js";
 import { analyzeCvOnce } from "../tools/jobs/cv-analyzer.js";
 import { getRankedJobsBriefing } from "../tools/jobs/fetcher.js";
-import { checkJobEmails, scanJobEmails, isGmailReady } from "../tools/gmail/checker.js";
+import { checkJobEmails, scanJobEmails, checkOutreachReplies, isGmailReady } from "../tools/gmail/checker.js";
 import { getProfileValue } from "../memory/profile.js";
 import { getPipelineCounts } from "../tools/jobs/tracker.js";
+import { emitEvent } from "../events/emitter.js";
 
 const HEARTBEAT_CRON = "0 8 * * *";
 const EMAIL_SCAN_CRON = "1 8 * * *";   // 08:01 daily — scan last 24h of Gmail
@@ -319,6 +320,9 @@ export async function sendHeartbeat(): Promise<void> {
             if (part.trim()) await sendPart(chatId, part);
         }
 
+        // Track 1: broadcast that the morning briefing is delivered.
+        emitEvent("briefing_sent", null);
+
         // Send a dashboard button so the morning briefing is one tap from the full UI
         const btn = dashboardButton(config.webappUrl, "/", config.dashboardToken);
         if (btn) {
@@ -353,6 +357,9 @@ export async function sendHeartbeatNoNews(): Promise<void> {
         for (const part of parts) {
             if (part.trim()) await sendPart(chatId, part);
         }
+
+        // Track 1: broadcast that the morning briefing is delivered.
+        emitEvent("briefing_sent", null);
 
         console.log(`💓 Briefing (no news) sent to [${chatId}]`);
     } catch (error) {
@@ -451,6 +458,7 @@ async function checkReminders(): Promise<void> {
         for (const r of due) {
             try {
                 await bot.api.sendMessage(chatId, `⏰ Reminder: ${r.message}`);
+                emitEvent("reminder_fired", { message: r.message });
                 db.prepare("UPDATE reminders SET sent = 1 WHERE id = ?").run(r.id);
             } catch (err) {
                 console.error(`❌ Reminder send failed for #${r.id}:`, err);
@@ -465,6 +473,10 @@ async function runDailyEmailScan(): Promise<void> {
     try {
         console.log("📧 Daily email scan — last 24h…");
         const results = await scanJobEmails(1);
+
+        // Track 1: broadcast completion of the daily scan.
+        emitEvent("email_scanned", { count: results.length });
+
         if (results.length > 0) {
             const userId = config.allowedUserIds[0];
             await bot.api.sendMessage(
@@ -476,6 +488,9 @@ async function runDailyEmailScan(): Promise<void> {
         } else {
             console.log("📧 Daily scan: no new job emails in last 24h");
         }
+
+        // Track 4: detect replies to cold outreach and update spontaneous_targets.
+        await checkOutreachReplies();
     } catch (err) {
         console.error("❌ Daily email scan failed:", err);
     }

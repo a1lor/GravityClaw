@@ -17,6 +17,16 @@ interface McpConfig {
     mcpServers: Record<string, McpServerConfig>;
 }
 
+function resolveHeaderValue(value: string): string {
+    // Supports small config shorthand like `env:MY_SECRET`.
+    // Anything else is returned verbatim.
+    if (value.startsWith("env:")) {
+        const key = value.slice("env:".length).trim();
+        return process.env[key] ?? "";
+    }
+    return value;
+}
+
 interface ConnectedServer {
     name: string;
     client: Client;
@@ -96,9 +106,15 @@ async function connectUrlServer(name: string, config: McpServerConfig): Promise<
 
     try {
         const url = new URL(config.url);
+        const resolvedHeaders: Record<string, string> = {};
+        for (const [k, v] of Object.entries(config.headers ?? {})) {
+            const resolved = resolveHeaderValue(String(v));
+            // Avoid sending empty Authorization headers if the env var isn't set.
+            if (resolved) resolvedHeaders[k] = resolved;
+        }
         const transport = new SSEClientTransport(url, {
             eventSourceInit: {
-                headers: config.headers ?? {}
+                headers: resolvedHeaders
             } as unknown as EventSourceInit
         });
 

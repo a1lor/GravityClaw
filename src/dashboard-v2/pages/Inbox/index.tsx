@@ -607,6 +607,21 @@ function ScanButton({ onDone }: { onDone: () => void }) {
   // Do NOT divide by totalEmails — that produces wrong values.
   const pct = progress ? progress.processed : 0
 
+  // Convert backend `processed` (0–50 metadata, 50–100 classifying) into an
+  // approximate "X / Y" count for the UI counter.
+  let processedCount = 0
+  if (progress && progress.totalEmails > 0) {
+    if (progress.phase === 'done') processedCount = progress.totalEmails
+    else if (progress.phase === 'metadata') {
+      processedCount = Math.min(progress.totalEmails, Math.floor((progress.processed / 50) * progress.totalEmails))
+    } else if (progress.phase === 'classifying') {
+      processedCount = Math.min(
+        progress.totalEmails,
+        Math.floor(((progress.processed - 50) / 50) * progress.totalEmails),
+      )
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
       {scanning && progress ? (
@@ -620,7 +635,7 @@ function ScanButton({ onDone }: { onDone: () => void }) {
           gap: 6,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#94a3b8' }}>
               {phaseLabel[progress.phase] ?? progress.phase}
             </span>
             <span style={{ fontSize: 20, fontWeight: 900, color: '#38bdf8', lineHeight: 1 }}>
@@ -631,7 +646,9 @@ function ScanButton({ onDone }: { onDone: () => void }) {
             <div style={{ height: '100%', width: `${pct}%`, background: '#38bdf8', transition: 'width 0.4s ease' }} />
           </div>
           <div style={{ fontSize: 11, color: '#475569' }}>
-            {progress.totalEmails > 0 ? `${progress.totalEmails} emails` : 'Loading…'} · {progress.matched} matched
+            {progress.totalEmails > 0
+              ? `${processedCount} / ${progress.totalEmails} emails`
+              : 'Loading…'} · {progress.matched} matched
           </div>
         </div>
       ) : (

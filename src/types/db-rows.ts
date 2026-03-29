@@ -83,6 +83,7 @@ export interface CvLibraryRow {
   language: string;
   file_path: string;
   file_name: string;
+  extracted_text?: string | null;
   updated_at: string;
 }
 

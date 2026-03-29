@@ -54,7 +54,6 @@ export function PipelineStudioTab() {
   }, [last?.updated_at])
 
   const pdfFile = useMemo(() => last?.files?.find((f) => f.kind === 'pdf') ?? null, [last])
-  const txtFile = useMemo(() => last?.files?.find((f) => f.kind === 'txt') ?? null, [last])
 
   async function generate() {
     const clean = url.trim()

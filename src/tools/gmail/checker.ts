@@ -3,6 +3,7 @@ import { getAuthenticatedClient, isGmailReady } from "./auth.js";
 import { db } from "../../memory/db.js";
 import { chat } from "../../llm/llm.js";
 import { trackUsage } from "../../usage/tracker.js";
+import { emitEvent } from "../../events/emitter.js";
 
 export interface EmailSummary {
     from: string;
@@ -237,6 +238,132 @@ export function saveJobEmail(email: EmailSummary): boolean {
 
 export function getAllJobEmails() {
     return stmtGetAll.all() as any[];
+}
+
+function parseDbDateTime(value: string | null | undefined): number | null {
+    const raw = value ? String(value).trim() : "";
+    if (!raw) return null;
+    // SQLite datetime('now') yields: "YYYY-MM-DD HH:MM:SS"
+    const iso = raw.includes("T") ? raw : raw.replace(" ", "T") + "Z";
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) ? t : null;
+}
+
+function extractEmailFromHeader(fromHeader: string): string {
+    // Similar extraction as elsewhere in this codebase.
+    const m = fromHeader.match(/<(.+)>|(\S+@\S+\.\S+)/);
+    return String(m ? (m[1] || m[2]) : fromHeader).trim();
+}
+
+export async function checkOutreachReplies(): Promise<void> {
+    if (!isGmailReady()) return;
+
+    const auth = getAuthenticatedClient();
+    if (!auth) return;
+
+    const gmail = google.gmail({ version: "v1", auth });
+
+    // Used to exclude self-sent messages from reply matching.
+    let myEmail = "";
+    try {
+        const profile = await gmail.users.getProfile({ userId: "me" });
+        myEmail = String(profile.data.emailAddress ?? "").trim().toLowerCase();
+    } catch {
+        // Ignore; we still do in-code filtering when possible.
+    }
+
+    const rawTargets = db
+        .prepare(
+            `SELECT id, company, hr_email, sent_at
+             FROM spontaneous_targets
+             WHERE status = 'sent' AND sent_at IS NOT NULL`,
+        )
+        .all() as { id: number; company: string; hr_email: string; sent_at: string }[];
+
+    if (rawTargets.length === 0) return;
+
+    const BATCH_SIZE = 10;
+
+    for (let i = 0; i < rawTargets.length; i += BATCH_SIZE) {
+        const batch = rawTargets.slice(i, i + BATCH_SIZE);
+
+        const emails = batch
+            .map((t) => String(t.hr_email ?? "").trim().toLowerCase())
+            .filter(Boolean);
+
+        if (emails.length === 0) continue;
+
+        // After = earliest sent_at in this batch.
+        const earliestMs = Math.min(
+            ...batch
+                .map((t) => parseDbDateTime(t.sent_at))
+                .filter((x): x is number => x !== null),
+        );
+        if (!Number.isFinite(earliestMs)) continue;
+
+        const earliestUnix = Math.floor(earliestMs / 1000);
+
+        const fromPart = `from:(${emails.join(" OR ")})`;
+        const query = myEmail ? `${fromPart} after:${earliestUnix} -from:${myEmail}` : `${fromPart} after:${earliestUnix}`;
+
+        const listRes = await gmail.users.messages.list({
+            userId: "me",
+            q: query,
+            maxResults: 100,
+        });
+        const messageIds = listRes.data.messages ?? [];
+        if (messageIds.length === 0) continue;
+
+        const targetsByEmail = new Map<string, { id: number; company: string; sentAtMs: number }[]>();
+        for (const t of batch) {
+            const cleanHr = String(t.hr_email ?? "").trim().toLowerCase();
+            const sentAtMs = parseDbDateTime(t.sent_at);
+            if (!cleanHr || sentAtMs === null) continue;
+
+            const arr = targetsByEmail.get(cleanHr) ?? [];
+            arr.push({ id: t.id, company: t.company, sentAtMs });
+            targetsByEmail.set(cleanHr, arr);
+        }
+
+        const stmtMarkReplied = db.prepare(`
+          UPDATE spontaneous_targets
+          SET reply_at = datetime('now'), status = 'replied'
+          WHERE id = ? AND status = 'sent'
+        `);
+
+        for (const m of messageIds) {
+            if (!m.id) continue;
+
+            const full = await gmail.users.messages.get({
+                userId: "me",
+                id: m.id,
+                format: "metadata",
+                metadataHeaders: ["From"],
+            });
+
+            const headers = full.data.payload?.headers ?? [];
+            const get = (name: string) => headers.find((h) => h.name === name)?.value ?? "";
+            const fromHeader = get("From");
+            const cleanFrom = extractEmailFromHeader(fromHeader).toLowerCase();
+            if (!cleanFrom) continue;
+            if (myEmail && cleanFrom === myEmail) continue;
+
+            const internalMs = Number(full.data.internalDate);
+            if (!Number.isFinite(internalMs) || internalMs <= 0) continue;
+
+            const candidates = targetsByEmail.get(cleanFrom) ?? [];
+            if (candidates.length === 0) continue;
+
+            for (const t of candidates) {
+                if (internalMs > t.sentAtMs) {
+                    const result = stmtMarkReplied.run(t.id);
+                    if (result.changes > 0) {
+                        emitEvent("outreach_replied", { company: t.company, targetId: t.id });
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ── Link email to pipeline (or create a new entry) ───

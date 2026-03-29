@@ -14,6 +14,13 @@ export interface Target {
   created_at: string
 }
 
+export interface DiscoverTargetSuggestion {
+  company: string
+  hr_email: string
+  industry: string
+  reason: string
+}
+
 export interface SpontaneeStats {
   byStatus: Record<string, number>
   sent: number
@@ -25,7 +32,18 @@ export function useTargets(status: string) {
   const q = useQuery({
     queryKey: ['spontanee', 'targets', status],
     queryFn: () =>
-      api.get<Target[]>(`/api/spontanee/targets?status=${encodeURIComponent(status)}&limit=200`),
+      api
+        .get<any[]>(`/api/spontanee/targets?status=${encodeURIComponent(status)}&limit=200`)
+        .then((rows) =>
+          (rows ?? []).map((r) => ({
+            ...r,
+            email: String(r.email ?? r.hr_email ?? ''),
+            title: String(r.title ?? r.industry ?? r.hr_name ?? ''),
+            notes: String(r.notes ?? ''),
+            email_subject: String(r.email_subject ?? ''),
+            sent_letter: String(r.sent_letter ?? ''),
+          })),
+        ) as Promise<Target[]>,
     staleTime: 30_000,
   })
   return { data: q.data ?? [], isLoading: q.isLoading, isError: q.isError, refetch: q.refetch }
@@ -85,6 +103,21 @@ export function useBatchGenerate() {
     mutate: mutation.mutate,
     mutateAsync: mutation.mutateAsync,
     isPending: mutation.isPending,
+  }
+}
+
+export function useDiscoverTargets() {
+  const mutation = useMutation({
+    mutationFn: (vars: { count?: number; industry?: string }) =>
+      api.post<DiscoverTargetSuggestion[]>('/api/spontanee/discover', vars),
+  })
+
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+    error: mutation.error,
   }
 }
 

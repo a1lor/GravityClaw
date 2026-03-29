@@ -267,6 +267,19 @@ const migrations: (() => void)[] = [
     () => {
         addColumnIfNotExists("job_emails", "hidden", "INTEGER NOT NULL DEFAULT 0");
     },
+    // v12: Bot events for SSE activity feed
+    () => {
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS bot_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              type TEXT NOT NULL,
+              message TEXT NOT NULL,
+              metadata TEXT,
+              created_at DATETIME DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_bot_events_created_at ON bot_events(created_at);
+        `);
+    },
 ];
 
 // Run pending migrations
@@ -308,6 +321,7 @@ db.exec(`
     language      TEXT    NOT NULL,    -- 'fr' | 'en'
     file_path     TEXT    NOT NULL,
     file_name     TEXT    NOT NULL,
+    extracted_text TEXT,
     is_default    INTEGER NOT NULL DEFAULT 0,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
     updated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -315,6 +329,9 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_cv_library_type_lang ON cv_library(job_type, language);
 `);
+
+// Non-destructive migration for existing DBs created before extracted_text existed.
+addColumnIfNotExists("cv_library", "extracted_text", "TEXT");
 
 // ── Reminders table ──────────────────────────────────
 db.exec(`

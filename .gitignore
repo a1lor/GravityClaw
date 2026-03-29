@@ -63,6 +63,8 @@ coverage/
 .cache/
 .parcel-cache/
 .railway/
+.claude/
+.git_old_backup/
 
 # Gmail OAuth tokens (sensitive!)
 token.json

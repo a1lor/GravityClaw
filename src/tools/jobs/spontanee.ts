@@ -51,6 +51,32 @@ const stmtDailyCount = db.prepare(
 
 // ── CRUD ──────────────────────────────────────────────
 export function addTarget(company: string, hrEmail: string, industry = ""): boolean {
+    // Cold outreach assumes 1 target row per company.
+    const existing = db
+        .prepare(`SELECT id, hr_email, industry FROM spontaneous_targets WHERE company = ? ORDER BY id DESC LIMIT 1`)
+        .get(company) as any;
+
+    if (existing) {
+        const sets: string[] = [];
+        const vals: any[] = [];
+
+        if ((existing.hr_email ?? "") === "" && hrEmail) {
+            sets.push("hr_email = ?");
+            vals.push(hrEmail);
+        }
+
+        if (industry && !(existing.industry ?? "")) {
+            sets.push("industry = ?");
+            vals.push(industry);
+        }
+
+        if (sets.length > 0) {
+            vals.push(existing.id);
+            db.prepare(`UPDATE spontaneous_targets SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+        }
+        return true;
+    }
+
     const result = stmtInsert.run(company, hrEmail, industry);
     return result.changes > 0;
 }
@@ -61,7 +87,9 @@ export function getPendingTargets(limit = 5): SpontaneousTarget[] {
 
 export function updateTargetStatus(id: number, status: string, notes = "", sentLetter?: string, emailSubject?: string): void {
     stmtUpdate.run(status, notes, status, id);
-    if (status === 'sent' && sentLetter !== undefined && emailSubject !== undefined) {
+    // Persist generated draft fields for both "draft" and "sent".
+    // UI/API require these fields to exist before the send flow can work.
+    if ((status === 'sent' || status === 'draft') && sentLetter !== undefined && emailSubject !== undefined) {
         stmtUpdateLetter.run(emailSubject, sentLetter, id);
     }
 }
@@ -108,6 +136,24 @@ function detectLanguage(text: string): 'fr' | 'en' {
     return frenchMatches > englishMatches ? 'fr' : 'en';
 }
 
+function pickExtractedText(language: string): string | null {
+    const lang = (language || "").toLowerCase().startsWith("en") ? "en" : "fr";
+    const row = db.prepare(
+        `SELECT extracted_text
+         FROM cv_library
+         WHERE extracted_text IS NOT NULL AND extracted_text != ''
+         ORDER BY
+           CASE WHEN language = ? THEN 0
+                WHEN job_type = 'general' THEN 1
+                ELSE 2 END,
+           updated_at DESC
+         LIMIT 1`,
+    ).get(lang) as any;
+
+    const text = row?.extracted_text ? String(row.extracted_text).trim() : "";
+    return text ? text.slice(0, 12_000) : null;
+}
+
 // ── Email generation ──────────────────────────────────
 export async function generateSpontaneousEmail(target: SpontaneousTarget, contextHint?: string): Promise<SpontaneousEmail> {
     const profileCtx = buildProfileContext();
@@ -121,20 +167,42 @@ export async function generateSpontaneousEmail(target: SpontaneousTarget, contex
     const language = detectLanguage(detectionText);
 
     const isFrench = language === 'fr';
+    const extractedText = pickExtractedText(isFrench ? "fr" : "en");
+
+    const candidateCvBlock = extractedText
+        ? `CANDIDATE CV (use this as the authoritative source of skills, experience, and education):\n` +
+          `"""\n` +
+          `${extractedText}\n` +
+          `"""\n\n`
+        : null;
+
+    const goldenTemplateFrench =
+        `GOLDEN TEMPLATE (Follow this tone, structure, and technical background):\n` +
+        `"""\n` +
+        `Bonjour [Nom],\n\n` +
+        `Actuellement en troisième année à Aivancity School for Technology, Business & Society, je recherche une alternance en IA et Data Science pour la rentrée 2026, avec un rythme 3 sem. entreprise / 1 sem. école. Passionné par l'automatisation et les LLMs, je suis disponible pour un stage dès juin 2026 ou pour une alternance dès septembre 2026.\n\n` +
+        `[Paragraphe personnalisé sur l'intérêt pour ${target.company} et son industrie].\n\n` +
+        `Lors de mes missions chez OKO France et du projet Beparentalis en AI Clinic, j'ai travaillé sur l'analyse de données, l'optimisation de flux et de bases SQL, la mise en place d'architectures RAG et le fine-tuning de modèles. J'ai également conduit des projets de prototypage LLM avec HuggingFace et développé des scripts d'automatisation en Python.\n\n` +
+        `Je peux contribuer concrètement à vos projets de Data Product, au prototypage de solutions IA, et à l'amélioration des pipelines de données. Le coût de cette alternance serait réduit pour votre société grâce au plan d'aide à l'apprentissage (aide de 5000€).\n\n` +
+        `Vous trouverez mon CV en pièce jointe. Si vous le souhaitez, je suis disponible pour un échange de 20 minutes afin de discuter de vos besoins.\n` +
+        `"""\n\n`;
+
+    const goldenTemplateEnglish =
+        `GOLDEN TEMPLATE (Follow this tone, structure, and technical background):\n` +
+        `"""\n` +
+        `Dear [Name],\n\n` +
+        `I am currently a third-year student at Aivancity School for Technology, Business & Society, seeking an AI and Data Science apprenticeship starting September 2026, with a 3-week company / 1-week school rhythm. Passionate about automation and LLMs, I am available for an internship from June 2026 or an apprenticeship from September 2026.\n\n` +
+        `[Personalized paragraph about interest in ${target.company} and its industry].\n\n` +
+        `During my missions at OKO France and the Beparentalis project at AI Clinic, I worked on data analysis, SQL database and workflow optimization, RAG architecture implementation, and model fine-tuning. I also led LLM prototyping projects with HuggingFace and developed automation scripts in Python.\n\n` +
+        `I can contribute concretely to your Data Product projects, AI solution prototyping, and data pipeline improvements. The cost of this apprenticeship would be reduced for your company thanks to the apprenticeship support plan (€5000 aid).\n\n` +
+        `You will find my CV attached. If you wish, I am available for a 20-minute call to discuss your needs.\n` +
+        `"""\n\n`;
 
     const prompt = isFrench
         ? `You are a professional career coach specializing in high-end tech recruitment. Write a highly personalized, modern, and structured "candidature spontanée" email in French for ${name}, targeting ${target.company} (industry: ${target.industry || "non précisée"}).\n\n` +
           `CANDIDATE PROFILE:${profileCtx}\n\n` +
           `TARGET:\n- Company: ${target.company}\n- Industry: ${target.industry || "non précisée"}\n\n` +
-          `GOLDEN TEMPLATE (Follow this tone, structure, and technical background):\n` +
-          `"""\n` +
-          `Bonjour [Nom],\n\n` +
-          `Actuellement en troisième année à Aivancity School for Technology, Business & Society, je recherche une alternance en IA et Data Science pour la rentrée 2026, avec un rythme 3 sem. entreprise / 1 sem. école. Passionné par l'automatisation et les LLMs, je suis disponible pour un stage dès juin 2026 ou pour une alternance dès septembre 2026.\n\n` +
-          `[Paragraphe personnalisé sur l'intérêt pour ${target.company} et son industrie].\n\n` +
-          `Lors de mes missions chez OKO France et du projet Beparentalis en AI Clinic, j'ai travaillé sur l'analyse de données, l'optimisation de flux et de bases SQL, la mise en place d'architectures RAG et le fine-tuning de modèles. J'ai également conduit des projets de prototypage LLM avec HuggingFace et développé des scripts d'automatisation en Python.\n\n` +
-          `Je peux contribuer concrètement à vos projets de Data Product, au prototypage de solutions IA, et à l'amélioration des pipelines de données. Le coût de cette alternance serait réduit pour votre société grâce au plan d'aide à l'apprentissage (aide de 5000€).\n\n` +
-          `Vous trouverez mon CV en pièce jointe. Si vous le souhaitez, je suis disponible pour un échange de 20 minutes afin de discuter de vos besoins.\n` +
-          `"""\n\n` +
+          (candidateCvBlock ?? goldenTemplateFrench) +
           `INSTRUCTIONS:\n` +
           `- Write ENTIRELY in French. Use "vouvoiement".\n` +
           `- Use clear paragraph breaks (double newline) to ensure a clean, breathable structure.\n` +
@@ -146,15 +214,7 @@ export async function generateSpontaneousEmail(target: SpontaneousTarget, contex
         : `You are a professional career coach specializing in high-end tech recruitment. Write a highly personalized, modern, and structured cold outreach email in English for ${name}, targeting ${target.company} (industry: ${target.industry || "not specified"}).\n\n` +
           `CANDIDATE PROFILE:${profileCtx}\n\n` +
           `TARGET:\n- Company: ${target.company}\n- Industry: ${target.industry || "not specified"}\n\n` +
-          `GOLDEN TEMPLATE (Follow this tone, structure, and technical background):\n` +
-          `"""\n` +
-          `Dear [Name],\n\n` +
-          `I am currently a third-year student at Aivancity School for Technology, Business & Society, seeking an AI and Data Science apprenticeship starting September 2026, with a 3-week company / 1-week school rhythm. Passionate about automation and LLMs, I am available for an internship from June 2026 or an apprenticeship from September 2026.\n\n` +
-          `[Personalized paragraph about interest in ${target.company} and its industry].\n\n` +
-          `During my missions at OKO France and the Beparentalis project at AI Clinic, I worked on data analysis, SQL database and workflow optimization, RAG architecture implementation, and model fine-tuning. I also led LLM prototyping projects with HuggingFace and developed automation scripts in Python.\n\n` +
-          `I can contribute concretely to your Data Product projects, AI solution prototyping, and data pipeline improvements. The cost of this apprenticeship would be reduced for your company thanks to the apprenticeship support plan (€5000 aid).\n\n` +
-          `You will find my CV attached. If you wish, I am available for a 20-minute call to discuss your needs.\n` +
-          `"""\n\n` +
+          (candidateCvBlock ?? goldenTemplateEnglish) +
           `INSTRUCTIONS:\n` +
           `- Write ENTIRELY in English. Use professional tone.\n` +
           `- Use clear paragraph breaks (double newline) to ensure a clean, breathable structure.\n` +

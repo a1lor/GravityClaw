@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
@@ -178,12 +178,6 @@ export function PipelineCandidatureTab() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'draft' | 'sent' | 'replied'>('pending')
   const [busyId, setBusyId] = useState<number | null>(null)
 
-  const { data: stats } = useQuery({
-    queryKey: ['spontanee-stats'],
-    queryFn: () => api.get('/api/spontanee/stats'),
-    staleTime: 30_000,
-  })
-
   const { data: targets, refetch } = useQuery<SpontaneousTarget[]>({
     queryKey: ['spontanee-targets', filterStatus],
     queryFn: () => api.get<SpontaneousTarget[]>(`/api/spontanee/targets?status=${filterStatus}&limit=200`),
@@ -219,12 +213,6 @@ export function PipelineCandidatureTab() {
       alert(err?.message || 'Failed to save')
     }
   }
-
-  const count = useMemo(() => {
-    if (!stats) return 0
-    if (filterStatus === 'pending') return (stats.byStatus?.pending ?? 0) + (stats.byStatus?.draft ?? 0)
-    return stats.byStatus?.[filterStatus] ?? 0
-  }, [stats, filterStatus])
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

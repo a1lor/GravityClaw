@@ -8,6 +8,7 @@ import { buildMemoryContext } from "../memory/memories.js";
 import { buildSemanticRecall, upsertConversation } from "../memory/vector.js";
 import { extractAndSaveFacts } from "./fact-extractor.js";
 import { buildProfileContext } from "../memory/profile.js";
+import { emitEvent } from "../events/emitter.js";
 
 // ── Task 4: Relevance Filter ──────────────────────────
 function getRelevantCategories(message: string): string[] {
@@ -220,6 +221,9 @@ export async function runAgentLoop(
 
         // Persist the final text response to SQLite history
         const assistantId = saveMessage("assistant", assistantText, undefined, undefined, dialogueId);
+
+        // Track 1: broadcast the assistant turn completion.
+        emitEvent("agent_response", { summary: assistantText.slice(0, 100) });
 
         // ── Background Ops ─────────────────────────────
         upsertConversation(userId, "user", userMessage).catch((e) => console.warn("⚠️ Background op failed [User Upsert]:", e instanceof Error ? e.message : String(e)));

@@ -15,6 +15,19 @@ function ApplicationSheet({
 }) {
   const queryClient = useQueryClient()
   const [errorMessage, setErrorMessage] = useState('')
+  const [showColdOutreachPrompt, setShowColdOutreachPrompt] = useState(false)
+  const [isAddingOutreach, setIsAddingOutreach] = useState(false)
+  const [coldOutreachError, setColdOutreachError] = useState('')
+
+  const dismissedKey = `outreach_dismissed_${application.id}`
+
+  function isDismissed(): boolean {
+    try {
+      return localStorage.getItem(dismissedKey) === '1'
+    } catch {
+      return false
+    }
+  }
 
   const { mutate, isPending } = useMutation({
     mutationFn: (newStatus: string) =>
@@ -37,13 +50,56 @@ function ApplicationSheet({
       }
       setErrorMessage('Move failed')
     },
-    onSuccess: () => onClose(),
+    onSuccess: (_data, newStatus) => {
+      // When user moves to rejected, optionally suggest adding the company to cold outreach.
+      if (newStatus === 'rejected') {
+        if (isDismissed()) {
+          onClose()
+        } else {
+          setColdOutreachError('')
+          setShowColdOutreachPrompt(true)
+        }
+        return
+      }
+      onClose()
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.applications })
     },
   })
 
   const statuses = ['applied', 'screening', 'interview', 'offer', 'rejected', 'withdrawn']
+
+  async function handleColdOutreachAccept() {
+    setIsAddingOutreach(true)
+    setColdOutreachError('')
+    try {
+      await api.post('/api/spontanee', {
+        company: application.company,
+        // Let backend discover HR email when missing.
+        hr_email: '',
+        industry: '',
+      })
+      await queryClient.invalidateQueries({ queryKey: ['spontanee', 'targets'] })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.spontanee })
+      setShowColdOutreachPrompt(false)
+      onClose()
+    } catch (err: any) {
+      setColdOutreachError(err?.message || 'Failed to add to cold outreach')
+    } finally {
+      setIsAddingOutreach(false)
+    }
+  }
+
+  function handleColdOutreachDismiss() {
+    try {
+      localStorage.setItem(dismissedKey, '1')
+    } catch {
+      // ignore
+    }
+    setShowColdOutreachPrompt(false)
+    onClose()
+  }
 
   return (
     <>
@@ -102,6 +158,63 @@ function ApplicationSheet({
             )
           })}
         </div>
+
+        {showColdOutreachPrompt && (
+          <div
+            style={{
+              border: '1px solid rgba(167,139,250,0.35)',
+              background: 'rgba(167,139,250,0.08)',
+              borderRadius: 10,
+              padding: 14,
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ fontSize: 13, color: '#e9d5ff', fontWeight: 700, marginBottom: 8 }}>
+              Add {application.company} to cold outreach?
+            </div>
+            {coldOutreachError && (
+              <div style={{ fontSize: 12, color: '#f87171', marginBottom: 8 }}>
+                {coldOutreachError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={handleColdOutreachAccept}
+                disabled={isAddingOutreach}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(167,139,250,0.15)',
+                  border: '1px solid rgba(167,139,250,0.35)',
+                  color: '#a78bfa',
+                  cursor: isAddingOutreach ? 'default' : 'pointer',
+                  opacity: isAddingOutreach ? 0.7 : 1,
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                {isAddingOutreach ? 'Adding…' : 'Accept'}
+              </button>
+              <button
+                onClick={handleColdOutreachDismiss}
+                disabled={isAddingOutreach}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#94a3b8',
+                  cursor: isAddingOutreach ? 'default' : 'pointer',
+                  opacity: isAddingOutreach ? 0.7 : 1,
+                  fontWeight: 600,
+                  fontSize: 13,
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         <button
           onClick={onClose}

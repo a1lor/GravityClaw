@@ -23,7 +23,7 @@ import { getEmail, listEmails, patchEmail, deleteEmail, emailStats, createJobFro
 import { getEmailFullBody } from "./api/emailBody.js";
 import { getJob, listJobs, patchJob, deleteJob, getJobEmails } from "./api/jobs.js";
 import { cancelTaskHandler, getTaskStatus, listTasksHandler } from "./api/tasks.js";
-import { generateForTarget, getStats, getTarget, listTargets, patchTarget, sendOutreach, startBatch } from "./api/spontanee.js";
+import { addTarget, discoverTargets, generateForTarget, getStats, getTarget, listTargets, patchTarget, sendOutreach, startBatch, startBatchInternal } from "./api/spontanee.js";
 import { getKpis } from "./api/kpis.js";
 import { listModels } from "./api/models.js";
 import { createDialogue, deleteDialogue, listDialogueMessages, listDialogues, patchDialogue, sendDialogueMessage } from "./api/dialogues.js";
@@ -38,11 +38,15 @@ import { listCvs, uploadCv, deleteCv, downloadCv } from "./api/cvManager.js";
 import { getStatus } from "./api/status.js";
 import { addJobFromUrl } from "./api/jobAdd.js";
 import { scanJobEmails, scanProgress } from "../tools/gmail/checker.js";
+import { sendHeartbeatNoNews } from "../heartbeat/heartbeat.js";
+import { emitEvent, clients as sseClients } from "../events/emitter.js";
 import { globalSearch } from "./api/search.js";
 import { getHomeIntelligence } from "./api/intelligence.js";
 import multer from "multer";
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+// CV uploads are expected to be PDFs; keep memory usage bounded.
+// Note: endpoint uses this multer instance exclusively (`/api/cvs/upload`).
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const app = express();
 app.set("trust proxy", 1);
@@ -304,6 +308,9 @@ app.get("/api/tasks/:taskId", getTaskStatus);
 app.post("/api/tasks/:taskId/cancel", cancelTaskHandler);
 app.get("/api/spontanee/targets", listTargets);
 app.get("/api/spontanee/stats", getStats);
+// IMPORTANT: register /discover before any /api/spontanee/targets/:id routes.
+app.post("/api/spontanee/discover", discoverTargets);
+app.post("/api/spontanee", addTarget);
 app.get("/api/spontanee/targets/:id", getTarget);
 app.patch("/api/spontanee/targets/:id", patchTarget);
 app.post("/api/spontanee/targets/:id/generate", generateForTarget);
@@ -344,6 +351,105 @@ app.patch("/api/memories/:id", patchMemory);
 app.delete("/api/memories/:id", removeMemory);
 
 app.get("/api/home/intelligence", getHomeIntelligence);
+
+// ── Bot event feed (SSE + fallback fetch) ─────────────────────
+app.get("/api/bot_events", (req, res) => {
+  const limitRaw = typeof req.query.limit === "string" ? Number(req.query.limit) : 20;
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(1, Math.floor(limitRaw)), 100) : 20;
+  const rows = db
+    .prepare(
+      `SELECT id, type, message, metadata, created_at
+       FROM bot_events
+       ORDER BY id DESC
+       LIMIT ?`,
+    )
+    .all(limit) as any[];
+
+  // Return newest-first for the UI to render as a live feed.
+  res.json(rows);
+});
+
+app.get("/api/events", (req, res) => {
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.setHeader("Connection", "keep-alive");
+
+  // Express uses chunked encoding for streaming responses.
+  ;(res as any).flushHeaders?.();
+
+  // Register client so `emitEvent()` can broadcast.
+  sseClients.add(res as any);
+
+  const cleanup = () => {
+    sseClients.delete(res as any);
+  };
+  req.on("close", cleanup);
+  req.on("error", cleanup);
+
+  // Initial ping + keep-alive.
+  try {
+    res.write(": ping\n\n");
+  } catch {
+    cleanup();
+  }
+
+  const interval = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      clearInterval(interval);
+      cleanup();
+    }
+  }, 30_000);
+
+  // Important: don't end the response.
+});
+
+app.post("/api/actions/:action", async (req, res) => {
+  const action = String(req.params.action ?? "").trim();
+  const taskId = `action_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const label =
+    action === "send_briefing"
+      ? "Send briefing"
+      : action === "scan_emails"
+        ? "Scan emails"
+        : action === "outreach_batch"
+          ? "Outreach batch"
+          : "Action";
+
+  // Always record action start immediately.
+  emitEvent("task_started", { taskId, label });
+
+  const run = async () => {
+    let success = false;
+    try {
+      if (action === "send_briefing") {
+        await sendHeartbeatNoNews();
+      } else if (action === "scan_emails") {
+        const results = await scanJobEmails(1);
+        emitEvent("email_scanned", { count: results.length });
+      } else if (action === "outreach_batch") {
+        await startBatchInternal(5);
+        // startBatchInternal generates drafts (doesn't actually send cold emails).
+        // Emit a generic completion event so the dashboard can resolve loading.
+      } else {
+        throw new Error(`Unknown action: ${action}`);
+      }
+      success = true;
+    } catch (err) {
+      console.error(`❌ Action "${action}" failed:`, err);
+      success = false;
+    } finally {
+      emitEvent("task_completed", { taskId, label, success });
+    }
+  };
+
+  // Run without blocking the HTTP response.
+  void run();
+  res.json({ ok: true, taskId });
+});
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok" });
